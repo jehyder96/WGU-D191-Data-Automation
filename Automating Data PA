@@ -1,0 +1,68 @@
+
+-------------------CREATE SUMMARIZED TABLE--------------------------------------
+CREATE TABLE Customer_Rental_Frequency(
+customer_id integer,
+Number_of_rentals integer);
+-------------------INSERTING DATA INTO THE TABLE--------------------------------------
+INSERT INTO customer_rental_frequency
+SELECT customer_id, COUNT(*) FROM rental
+GROUP BY customer_id
+ORDER BY COUNT(*) DESC;
+-------------------- TO VIEW THE SUMMARIZED DETAIL TABLE —---------------------
+SELECT * FROM customer_rental_frequency;
+-------------------CREATE DETAILED TABLE--------------------------------------
+CREATE TABLE Detailed_Customer_Rental_Frequency(
+first_name varchar(45),
+last_name varchar(45),
+email varchar(50),
+customer_id integer,
+rental_id integer,
+active integer);
+-- —----CREATING THE TRIGGER-------
+CREATE TRIGGER trigger_new_rental
+  AFTER INSERT
+  ON Detailed_Customer_Rental_Frequency
+  FOR EACH ROW
+    EXECUTE FUNCTION summary_new_rental();
+  CREATE OR REPLACE FUNCTION summary_new_rental()
+    RETURNS TRIGGER
+    LANGUAGE PLPGSQL
+    AS
+  $$
+  BEGIN
+  DECLARE v_cnt integer;
+  SELECT COUNT(1) INTO v_cnt
+  FROM customer_rental_frequency
+  WHERE customer_id = NEW.customer_id;
+  IF v_cnt > 0 THEN
+    UPDATE customer_rental_frequency
+    SET number_of_rentals = number_of_rentals + 1
+    WHERE customer_id = NEW.customer_id;
+  ELSE
+    INSERT INTO customer_rental_frequency
+    VALUES (new.CUSTOMER_ID, 1)
+  END IF;
+  RETURN NEW;
+
+END;
+$$
+—------CREATING THE PROCEDURE ------
+CREATE OR REPLACE PROCEDURE update_summary_tables()
+LANGUAGE plpgsql as $$
+BEGIN
+  TRUNCATE TABLE detailed_customer_rental_frequency;
+  TRUNCATE TABLE customer_rental_frequency;
+  INSERT INTO detailed_customer_rental_frequency
+  SELECT first_name, last_name, email, Customer.customer_id, rental_id, active
+  FROM Customer INNER JOIN Rental ON Customer.customer_id =
+Rental.customer_id;
+  INSERT INTO customer_rental_frequency
+  SELECT customer_id, COUNT(*)
+  FROM detailed_customer_rental_frequency
+  GROUP BY customer_id
+  ORDER BY COUNT(*) DESC;
+END; $$
+—----- CALL update_summary_tables();
+—----- to call the stored procedures
+—----- SELECT (*) FROM Detailed_Customer_Rental_Frequency
+—----- to view detailed results
